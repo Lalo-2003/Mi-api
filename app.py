@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, send_file, render_template
 import mysql.connector
-
+import os
 
 app = Flask(__name__)
 from flask_cors import CORS
@@ -1483,4 +1483,4 @@ def delete_corte_de_caja(id_corte):
 if __name__ == "__main__":
     # Render asigna dinámicamente un puerto a través de la variable PORT
     port = int(os.environ.get("PORT", 5000))  # Usa 5000 como valor por defecto si no se especifica PORT
-    app.run(host="0.0.0.0", port=port) 
+    app.run(host="0.0.0.0", port=port)  # E
