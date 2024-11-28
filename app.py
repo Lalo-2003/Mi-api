@@ -1480,5 +1480,7 @@ def delete_corte_de_caja(id_corte):
         cursor.close()
         conn.close()
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    # Render asigna dinámicamente un puerto a través de la variable PORT
+    port = int(os.environ.get("PORT", 5000))  # Usa 5000 como valor por defecto si no se especifica PORT
+    app.run(host="0.0.0.0", port=port) 
