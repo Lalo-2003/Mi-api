@@ -1,6 +1,5 @@
 from flask import Flask, jsonify, request, send_file, render_template
 import mysql.connector
-import bcrypt
 
 
 app = Flask(__name__)
@@ -10,424 +9,1359 @@ from flask_cors import CORS
 CORS(app)
 
 
-def get_connection(database_name):
+def get_connection():
     return mysql.connector.connect(
-        host='20.151.93.235',
-        user='uvp',
-        password='rojito33',
-        database=database_name
+        host='35.228.92.221',
+        user='lalo',
+        password='lalo',
+        database='Hospital'
     )
 
-base_datos_personal = 'personal'
-base_datos_seguridad = 'seguridad'
+@app.route('/')
+def home():
+    return jsonify({"message": "Welcome to the Users API!"}), 200
+############################################
+#Usuarios
 
-@app.get('/api/rol')
-def get_roles():
-    cursor = None ##############
-    conn = None
+# Ruta para obtener todos los usuarios
+@app.route('/users', methods=['GET'])
+def get_users():
     try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM rol")
-        roles = cursor.fetchall()
-        return jsonify(roles)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        cursor.execute("SELECT * FROM users")
+        users = cursor.fetchall()
+        return jsonify(users), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
     finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
+        cursor.close()
+        conn.close()
 
-@app.post('/api/rol')
-def create_rol():
-    descripcion = request.json.get('descripcion')
-    estatus = request.json.get('estatus')
-    
-    if not descripcion or not estatus:
-        return jsonify({"error": "Los campos 'descripcion' y 'estatus' son requeridos"}), 400
+
+# Ruta para obtener un usuario por ID
+@app.route('/users/<int:user_id>', methods=['GET'])
+def get_user(user_id):
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_rol FROM rol WHERE id_rol LIKE 'R%' ORDER BY id_rol DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"R{last_num + 1:03d}"
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if user:
+            return jsonify(user), 200
         else:
-            nuevo_id = "R001"
-        cursor.execute(
-            "INSERT INTO rol (id_rol, descripcion, estatus) VALUES (%s, %s, %s)",
-            (nuevo_id, descripcion, estatus)
-        )
-        conn.commit()
-        return jsonify({"message": "Rol creado exitosamente", "id_rol": nuevo_id}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "User not found"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
     finally:
         cursor.close()
         conn.close()
 
 
-@app.delete('/api/rol/<string:id_rol>')
-def delete_rol(id_rol):
+# Ruta para crear un nuevo usuario
+@app.route('/users', methods=['POST'])
+def create_user():
+    data = request.json
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM rol WHERE id_rol = %s", (id_rol,))
-        conn.commit()
-        return jsonify({"message": "Rol eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.put('/api/rol/<string:id_rol>')
-def update_rol(id_rol):
-    descripcion = request.json.get('descripcion')
-    estatus = request.json.get('estatus')
-    if not descripcion or not estatus:
-        return jsonify({"error": "Los campos 'descripcion' y 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE rol SET descripcion = %s, estatus = %s WHERE id_rol = %s",
-            (descripcion, estatus, id_rol)
+            "INSERT INTO users (id, name_surname, email_user, pass_user, id_status) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (data['id'], data['name_surname'], data['email_user'], data['pass_user'], data['id_status'])
         )
         conn.commit()
-        return jsonify({"message": "Rol actualizado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"message": "User created successfully"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.get('/api/rol/<string:id_rol>')
-def get_rol(id_rol):
+
+# Ruta para actualizar un usuario
+@app.route('/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
+    data = request.json
     try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET name_surname = %s, email_user = %s, pass_user = %s, id_status = %s WHERE id = %s",
+            (data['name_surname'], data['email_user'], data['pass_user'], data['id_status'], user_id)
+        )
+        conn.commit()
+        if cursor.rowcount:
+            return jsonify({"message": "User updated successfully"}), 200
+        else:
+            return jsonify({"error": "User not found"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# Ruta para eliminar un usuario
+@app.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+        if cursor.rowcount:
+            return jsonify({"message": "User deleted successfully"}), 200
+        else:
+            return jsonify({"error": "User not found"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+############################################################
+
+#Status
+
+# Obtener todos los estados
+@app.route('/status', methods=['GET'])
+def get_status():
+    try:
+        conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM rol WHERE id_rol = %s", (id_rol,))
-        rol = cursor.fetchone()
-        if rol:
-            return jsonify(rol)
-        return jsonify({"error": "Rol no encontrado"}), 404
+        cursor.execute("SELECT * FROM status")
+        status = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(status), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Obtener un estado por ID
+@app.route('/status/<int:id_status>', methods=['GET'])
+def get_status_by_id(id_status):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM status WHERE id_status = %s", (id_status,))
+        status = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if status:
+            return jsonify(status), 200
+        else:
+            return jsonify({"message": "Estado no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Crear un nuevo estado
+@app.route('/status', methods=['POST'])
+def create_status():
+    try:
+        new_status = request.get_json()
+        id_status = new_status['id_status']
+        descripcion_status = new_status['descripcion_status']
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO status (id_status, descripcion_status) VALUES (%s, %s)",
+                       (id_status, descripcion_status))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Estado creado exitosamente"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Actualizar un estado existente
+@app.route('/status/<int:id_status>', methods=['PUT'])
+def update_status(id_status):
+    try:
+        updated_status = request.get_json()
+        descripcion_status = updated_status['descripcion_status']
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE status SET descripcion_status = %s WHERE id_status = %s",
+                       (descripcion_status, id_status))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Estado actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Estado no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Eliminar un estado
+@app.route('/status/<int:id_status>', methods=['DELETE'])
+def delete_status(id_status):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM status WHERE id_status = %s", (id_status,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Estado eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Estado no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+############################################################
+#Seguridad
+
+# Obtener todas las entradas de seguridad
+@app.route('/seguridad', methods=['GET'])
+def get_seguridad():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM seguridad")
+        seguridad = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(seguridad), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Obtener una entrada de seguridad por ID
+@app.route('/seguridad/<int:id_seguridad>', methods=['GET'])
+def get_seguridad_by_id(id_seguridad):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM seguridad WHERE id_seguridad = %s", (id_seguridad,))
+        seguridad = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if seguridad:
+            return jsonify(seguridad), 200
+        else:
+            return jsonify({"message": "Registro no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Crear una nueva entrada de seguridad
+@app.route('/seguridad', methods=['POST'])
+def create_seguridad():
+    try:
+        new_seguridad = request.get_json()
+        id_usuario = new_seguridad['id_usuario']
+        token = new_seguridad['token']
+        ultimo_login = new_seguridad.get('ultimo_login')
+        fecha_modificacion = new_seguridad.get('fecha_modificacion')
+        id_usuario_modificacion = new_seguridad.get('id_usuario_modificacion')
+        id_status = new_seguridad['id_status']
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO seguridad (id_usuario, token, ultimo_login, fecha_modificacion, id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (id_usuario, token, ultimo_login, fecha_modificacion, id_usuario_modificacion, id_status))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Registro de seguridad creado exitosamente"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Actualizar una entrada de seguridad existente
+@app.route('/seguridad/<int:id_seguridad>', methods=['PUT'])
+def update_seguridad(id_seguridad):
+    try:
+        updated_seguridad = request.get_json()
+        token = updated_seguridad['token']
+        ultimo_login = updated_seguridad.get('ultimo_login')
+        fecha_modificacion = updated_seguridad.get('fecha_modificacion')
+        id_usuario_modificacion = updated_seguridad.get('id_usuario_modificacion')
+        id_status = updated_seguridad['id_status']
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE seguridad
+            SET token = %s, ultimo_login = %s, fecha_modificacion = %s, id_usuario_modificacion = %s, id_status = %s
+            WHERE id_seguridad = %s
+        """, (token, ultimo_login, fecha_modificacion, id_usuario_modificacion, id_status, id_seguridad))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Registro de seguridad actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Registro no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+# Eliminar una entrada de seguridad
+@app.route('/seguridad/<int:id_seguridad>', methods=['DELETE'])
+def delete_seguridad(id_seguridad):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM seguridad WHERE id_seguridad = %s", (id_seguridad,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Registro de seguridad eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Registro no encontrado"}), 404
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+##############################
+#relacion usuario perfil
+
+# Obtener todas las relaciones usuario-perfil
+@app.route('/relacionusuarioperfil', methods=['GET'])
+def get_relacion_usuarios_perfiles():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM relacionusuarioperfil")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-##################################
-@app.get('/api/empleado')
+# Obtener una relación usuario-perfil por id_usuario e id_perfil
+@app.route('/relacionusuarioperfil/<int:id_usuario>/<int:id_perfil>', methods=['GET'])
+def get_relacion_usuario_perfil(id_usuario, id_perfil):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM relacionusuarioperfil WHERE id_usuario = %s AND id_perfil = %s", (id_usuario, id_perfil))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Relación no encontrada"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear una nueva relación usuario-perfil
+@app.route('/relacionusuarioperfil', methods=['POST'])
+def create_relacion_usuario_perfil():
+    try:
+        data = request.get_json()
+        id_usuario = data['id_usuario']
+        id_perfil = data['id_perfil']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO relacionusuarioperfil (id_usuario, id_perfil) VALUES (%s, %s)", (id_usuario, id_perfil))
+        conn.commit()
+        
+        return jsonify({"message": "Relación creada exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar una relación usuario-perfil por id_usuario e id_perfil
+@app.route('/relacionusuarioperfil/<int:id_usuario>/<int:id_perfil>', methods=['PUT'])
+def update_relacion_usuario_perfil(id_usuario, id_perfil):
+    try:
+        data = request.get_json()
+        # Asumimos que se quieren actualizar todos los valores
+        new_id_usuario = data.get('id_usuario', id_usuario)
+        new_id_perfil = data.get('id_perfil', id_perfil)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE relacionusuarioperfil
+            SET id_usuario = %s, id_perfil = %s
+            WHERE id_usuario = %s AND id_perfil = %s
+        """, (new_id_usuario, new_id_perfil, id_usuario, id_perfil))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Relación actualizada exitosamente"}), 200
+        else:
+            return jsonify({"message": "Relación no encontrada para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar una relación usuario-perfil por id_usuario e id_perfil
+@app.route('/relacionusuarioperfil/<int:id_usuario>/<int:id_perfil>', methods=['DELETE'])
+def delete_relacion_usuario_perfil(id_usuario, id_perfil):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM relacionusuarioperfil
+            WHERE id_usuario = %s AND id_perfil = %s
+        """, (id_usuario, id_perfil))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Relación eliminada exitosamente"}), 200
+        else:
+            return jsonify({"message": "Relación no encontrada para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+##################################################
+## Perfil
+
+# Obtener todos los perfiles
+@app.route('/perfil', methods=['GET'])
+def get_perfiles():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM perfil")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener un perfil por id_perfil
+@app.route('/perfil/<int:id_perfil>', methods=['GET'])
+def get_perfil(id_perfil):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM perfil WHERE id_perfil = %s", (id_perfil,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Perfil no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear un nuevo perfil
+@app.route('/perfil', methods=['POST'])
+def create_perfil():
+    try:
+        data = request.get_json()
+        nombre_perfil = data['nombre_perfil']
+        descripcion = data.get('descripcion', '')
+        fecha_creacion = data['fecha_creacion']
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO perfil (nombre_perfil, descripcion, fecha_creacion, id_status)
+            VALUES (%s, %s, %s, %s)
+        """, (nombre_perfil, descripcion, fecha_creacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Perfil creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un perfil por id_perfil
+@app.route('/perfil/<int:id_perfil>', methods=['PUT'])
+def update_perfil(id_perfil):
+    try:
+        data = request.get_json()
+        nombre_perfil = data.get('nombre_perfil')
+        descripcion = data.get('descripcion')
+        fecha_modificacion = data.get('fecha_modificacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE perfil
+            SET nombre_perfil = %s, descripcion = %s, fecha_modificacion = %s,
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_perfil = %s
+        """, (nombre_perfil, descripcion, fecha_modificacion, id_usuario_modificacion, id_status, id_perfil))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Perfil actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Perfil no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un perfil por id_perfil
+@app.route('/perfil/<int:id_perfil>', methods=['DELETE'])
+def delete_perfil(id_perfil):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM perfil WHERE id_perfil = %s", (id_perfil,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Perfil eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Perfil no encontrado para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+##########################################################33
+## Metodo de pago
+
+# Obtener todos los métodos de pago
+@app.route('/metodopago', methods=['GET'])
+def get_metodos_pago():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM metodopago")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener un método de pago por id_metodo_pago
+@app.route('/metodopago/<int:id_metodo_pago>', methods=['GET'])
+def get_metodo_pago(id_metodo_pago):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM metodopago WHERE id_metodo_pago = %s", (id_metodo_pago,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Método de pago no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear un nuevo método de pago
+@app.route('/metodopago', methods=['POST'])
+def create_metodo_pago():
+    try:
+        data = request.get_json()
+        nombre_metodo = data['nombre_metodo']
+        fecha_modificacion = data.get('fecha_modificacion', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO metodopago (nombre_metodo, fecha_modificacion, id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s)
+        """, (nombre_metodo, fecha_modificacion, id_usuario_modificacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Método de pago creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un método de pago por id_metodo_pago
+@app.route('/metodopago/<int:id_metodo_pago>', methods=['PUT'])
+def update_metodo_pago(id_metodo_pago):
+    try:
+        data = request.get_json()
+        nombre_metodo = data.get('nombre_metodo')
+        fecha_modificacion = data.get('fecha_modificacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE metodopago
+            SET nombre_metodo = %s, fecha_modificacion = %s, id_usuario_modificacion = %s, id_status = %s
+            WHERE id_metodo_pago = %s
+        """, (nombre_metodo, fecha_modificacion, id_usuario_modificacion, id_status, id_metodo_pago))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Método de pago actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Método de pago no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un método de pago por id_metodo_pago
+@app.route('/metodopago/<int:id_metodo_pago>', methods=['DELETE'])
+def delete_metodo_pago(id_metodo_pago):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM metodopago WHERE id_metodo_pago = %s", (id_metodo_pago,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Método de pago eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Método de pago no encontrado para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+######################
+#Impuesto
+
+# Obtener todos los impuestos
+@app.route('/impuesto', methods=['GET'])
+def get_impuestos():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM impuesto")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener un impuesto por id_impuesto
+@app.route('/impuesto/<int:id_impuesto>', methods=['GET'])
+def get_impuesto(id_impuesto):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM impuesto WHERE id_impuesto = %s", (id_impuesto,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Impuesto no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear un nuevo impuesto
+@app.route('/impuesto', methods=['POST'])
+def create_impuesto():
+    try:
+        data = request.get_json()
+        nombre_impuesto = data['nombre_impuesto']
+        porcentaje_impuesto = data['porcentaje_impuesto']
+        fecha_modificacion = data.get('fecha_modificacion', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO impuesto (nombre_impuesto, porcentaje_impuesto, fecha_modificacion, id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (nombre_impuesto, porcentaje_impuesto, fecha_modificacion, id_usuario_modificacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Impuesto creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un impuesto por id_impuesto
+@app.route('/impuesto/<int:id_impuesto>', methods=['PUT'])
+def update_impuesto(id_impuesto):
+    try:
+        data = request.get_json()
+        nombre_impuesto = data.get('nombre_impuesto')
+        porcentaje_impuesto = data.get('porcentaje_impuesto')
+        fecha_modificacion = data.get('fecha_modificacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE impuesto
+            SET nombre_impuesto = %s, porcentaje_impuesto = %s, fecha_modificacion = %s, id_usuario_modificacion = %s, id_status = %s
+            WHERE id_impuesto = %s
+        """, (nombre_impuesto, porcentaje_impuesto, fecha_modificacion, id_usuario_modificacion, id_status, id_impuesto))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Impuesto actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Impuesto no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un impuesto por id_impuesto
+@app.route('/impuesto/<int:id_impuesto>', methods=['DELETE'])
+def delete_impuesto(id_impuesto):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM impuesto WHERE id_impuesto = %s", (id_impuesto,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Impuesto eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Impuesto no encontrado para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+#########################################333333
+#Factura
+
+# Obtener todas las facturas
+@app.route('/factura', methods=['GET'])
+def get_facturas():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM factura")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener una factura por id_factura
+@app.route('/factura/<int:id_factura>', methods=['GET'])
+def get_factura(id_factura):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM factura WHERE id_factura = %s", (id_factura,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Factura no encontrada"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear una nueva factura
+@app.route('/factura', methods=['POST'])
+def create_factura():
+    try:
+        data = request.get_json()
+        fecha_factura = data['fecha_factura']
+        total = data['total']
+        estado = data['estado']
+        descuento_aplicado = data.get('descuento_aplicado', None)
+        descuento_especial = data.get('descuento_especial', None)
+        impuestos_aplicados = data.get('impuestos_aplicados', None)
+        id_impuesto = data.get('id_impuesto', None)
+        id_metodo_pago = data.get('id_metodo_pago', None)
+        id_estado = data.get('id_estado', None)
+        fecha_modificacion = data.get('fecha_modificacion', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO factura (fecha_factura, total, estado, descuento_aplicado, descuento_especial, 
+                                 impuestos_aplicados, id_impuesto, id_metodo_pago, id_estado, 
+                                 fecha_modificacion, id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (fecha_factura, total, estado, descuento_aplicado, descuento_especial, impuestos_aplicados,
+              id_impuesto, id_metodo_pago, id_estado, fecha_modificacion, id_usuario_modificacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Factura creada exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar una factura por id_factura
+@app.route('/factura/<int:id_factura>', methods=['PUT'])
+def update_factura(id_factura):
+    try:
+        data = request.get_json()
+        fecha_factura = data.get('fecha_factura')
+        total = data.get('total')
+        estado = data.get('estado')
+        descuento_aplicado = data.get('descuento_aplicado')
+        descuento_especial = data.get('descuento_especial')
+        impuestos_aplicados = data.get('impuestos_aplicados')
+        id_impuesto = data.get('id_impuesto')
+        id_metodo_pago = data.get('id_metodo_pago')
+        id_estado = data.get('id_estado')
+        fecha_modificacion = data.get('fecha_modificacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE factura
+            SET fecha_factura = %s, total = %s, estado = %s, descuento_aplicado = %s, descuento_especial = %s, 
+                impuestos_aplicados = %s, id_impuesto = %s, id_metodo_pago = %s, id_estado = %s, 
+                fecha_modificacion = %s, id_usuario_modificacion = %s, id_status = %s
+            WHERE id_factura = %s
+        """, (fecha_factura, total, estado, descuento_aplicado, descuento_especial, impuestos_aplicados,
+              id_impuesto, id_metodo_pago, id_estado, fecha_modificacion, id_usuario_modificacion, 
+              id_status, id_factura))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Factura actualizada exitosamente"}), 200
+        else:
+            return jsonify({"message": "Factura no encontrada para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar una factura por id_factura
+@app.route('/factura/<int:id_factura>', methods=['DELETE'])
+def delete_factura(id_factura):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM factura WHERE id_factura = %s", (id_factura,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Factura eliminada exitosamente"}), 200
+        else:
+            return jsonify({"message": "Factura no encontrada para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+###########################################33
+#Estado factura
+
+# Obtener todos los estados de factura
+@app.route('/estadofactura', methods=['GET'])
+def get_estadofacturas():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM estadofactura")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener un estado de factura por id_estado
+@app.route('/estadofactura/<int:id_estado>', methods=['GET'])
+def get_estadofactura(id_estado):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM estadofactura WHERE id_estado = %s", (id_estado,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Estado de factura no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear un nuevo estado de factura
+@app.route('/estadofactura', methods=['POST'])
+def create_estadofactura():
+    try:
+        data = request.get_json()
+        descripcion_estado = data['descripcion_estado']
+        fecha_modificacion = data.get('fecha_modificacion', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO estadofactura (descripcion_estado, fecha_modificacion, 
+                                       id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s)
+        """, (descripcion_estado, fecha_modificacion, id_usuario_modificacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Estado de factura creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un estado de factura por id_estado
+@app.route('/estadofactura/<int:id_estado>', methods=['PUT'])
+def update_estadofactura(id_estado):
+    try:
+        data = request.get_json()
+        descripcion_estado = data.get('descripcion_estado')
+        fecha_modificacion = data.get('fecha_modificacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE estadofactura
+            SET descripcion_estado = %s, fecha_modificacion = %s, 
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_estado = %s
+        """, (descripcion_estado, fecha_modificacion, id_usuario_modificacion, id_status, id_estado))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Estado de factura actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Estado de factura no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un estado de factura por id_estado
+@app.route('/estadofactura/<int:id_estado>', methods=['DELETE'])
+def delete_estadofactura(id_estado):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM estadofactura WHERE id_estado = %s", (id_estado,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Estado de factura eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Estado de factura no encontrado para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+###############################33333
+#empleados
+
+# Obtener todos los empleados
+@app.route('/empleado', methods=['GET'])
 def get_empleados():
     try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-
-        # Consulta para obtener todos los datos de empleado junto con la descripción del rol
-        cursor.execute("""
-            SELECT 
-                empleado.id_empleado,
-                empleado.nombre,
-                empleado.direccion,
-                empleado.telefono,
-                empleado.correo,
-                empleado.fecha_ingreso,
-                empleado.id_rol,
-                empleado.estatus,
-                empleado.fecha_modificacion,
-                rol.descripcion AS rol_descripcion
-            FROM 
-                empleado
-            LEFT JOIN 
-                rol ON empleado.id_rol = rol.id_rol
-        """)
-        
-        empleados = cursor.fetchall()
-        return jsonify(empleados)
+        cursor.execute("SELECT * FROM empleado")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.post('/api/empleado')
-def create_empleado():
-    nombre = request.json.get('nombre')
-    direccion = request.json.get('direccion')
-    telefono = request.json.get('telefono')
-    correo = request.json.get('correo')
-    fecha_ingreso = request.json.get('fecha_ingreso')
-    id_rol = request.json.get('id_rol')
-    estatus = request.json.get('estatus', 'activo')
-    
-    if not all([nombre, direccion, telefono, correo, fecha_ingreso, id_rol]):
-        return jsonify({"error": "Todos los campos son requeridos"}), 400
+# Obtener un empleado por id_empleado
+@app.route('/empleado/<int:id_empleado>', methods=['GET'])
+def get_empleado(id_empleado):
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_empleado FROM empleado WHERE id_empleado LIKE 'E%' ORDER BY id_empleado DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"E{last_num + 1:03d}"
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM empleado WHERE id_empleado = %s", (id_empleado,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
         else:
-            nuevo_id = "E001"
-        cursor.execute(
-            """
-            INSERT INTO empleado 
-            (id_empleado, nombre, direccion, telefono, correo, fecha_ingreso, id_rol, estatus) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (nuevo_id, nombre, direccion, telefono, correo, fecha_ingreso, id_rol, estatus)
-        )
-        conn.commit()
-        return jsonify({"message": "Empleado creado exitosamente", "id_empleado": nuevo_id}), 201
+            return jsonify({"message": "Empleado no encontrado"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.put('/api/empleado/<string:id_empleado>')
-def update_empleado(id_empleado):
-    nombre = request.json.get('nombre')
-    direccion = request.json.get('direccion')
-    telefono = request.json.get('telefono')
-    correo = request.json.get('correo')
-    fecha_ingreso = request.json.get('fecha_ingreso')
-    id_rol = request.json.get('id_rol')
-    estatus = request.json.get('estatus', 'activo')
-    if not all([nombre, direccion, telefono, correo, fecha_ingreso, id_rol]):
-        return jsonify({"error": "Todos los campos 'nombre', 'direccion', 'telefono', 'correo', 'fecha_ingreso' e 'id_rol' son requeridos"}), 400
+# Crear un nuevo empleado
+@app.route('/empleado', methods=['POST'])
+def create_empleado():
     try:
-        conn = get_connection(base_datos_personal)
+        data = request.get_json()
+        nombre_empleado = data['nombre_empleado']
+        apellido_empleado = data.get('apellido_empleado', None)
+        sexo_empleado = data.get('sexo_empleado', None)
+        telefono_empleado = data.get('telefono_empleado', None)
+        email_empleado = data.get('email_empleado', None)
+        profesion_empleado = data.get('profesion_empleado', None)
+        salario_empleado = data.get('salario_empleado', None)
+        fecha_contratacion = data.get('fecha_contratacion', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE empleado 
-            SET nombre = %s, direccion = %s, telefono = %s, correo = %s, fecha_ingreso = %s, id_rol = %s, estatus = %s 
-            WHERE id_empleado = %s
-            """,
-            (nombre, direccion, telefono, correo, fecha_ingreso, id_rol, estatus, id_empleado)
-        )
+        cursor.execute("""
+            INSERT INTO empleado (nombre_empleado, apellido_empleado, sexo_empleado, 
+                                  telefono_empleado, email_empleado, profesion_empleado, 
+                                  salario_empleado, fecha_contratacion, id_usuario_modificacion, 
+                                  id_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (nombre_empleado, apellido_empleado, sexo_empleado, telefono_empleado, 
+              email_empleado, profesion_empleado, salario_empleado, fecha_contratacion, 
+              id_usuario_modificacion, id_status))
         conn.commit()
-        return jsonify({"message": "Empleado actualizado exitosamente"})
+        
+        return jsonify({"message": "Empleado creado exitosamente"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.delete('/api/empleado/<string:id_empleado>')
+# Actualizar un empleado por id_empleado
+@app.route('/empleado/<int:id_empleado>', methods=['PUT'])
+def update_empleado(id_empleado):
+    try:
+        data = request.get_json()
+        nombre_empleado = data.get('nombre_empleado')
+        apellido_empleado = data.get('apellido_empleado')
+        sexo_empleado = data.get('sexo_empleado')
+        telefono_empleado = data.get('telefono_empleado')
+        email_empleado = data.get('email_empleado')
+        profesion_empleado = data.get('profesion_empleado')
+        salario_empleado = data.get('salario_empleado')
+        fecha_contratacion = data.get('fecha_contratacion')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE empleado
+            SET nombre_empleado = %s, apellido_empleado = %s, sexo_empleado = %s, 
+                telefono_empleado = %s, email_empleado = %s, profesion_empleado = %s, 
+                salario_empleado = %s, fecha_contratacion = %s, 
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_empleado = %s
+        """, (nombre_empleado, apellido_empleado, sexo_empleado, telefono_empleado, 
+              email_empleado, profesion_empleado, salario_empleado, fecha_contratacion, 
+              id_usuario_modificacion, id_status, id_empleado))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Empleado actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Empleado no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un empleado por id_empleado
+@app.route('/empleado/<int:id_empleado>', methods=['DELETE'])
 def delete_empleado(id_empleado):
     try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM empleado WHERE id_empleado = %s", (id_empleado,))
         conn.commit()
-        return jsonify({"message": "Empleado eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-#########################################
-@app.get('/api/asistencia')
-def get_asistencias():
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT asistencia.id_asistencia, asistencia.id_empleado, asistencia.fecha_ingreso, 
-                   asistencia.hora_entrada, asistencia.hora_salida, asistencia.estatus, 
-                   asistencia.fecha_modificacion, empleado.nombre AS empleado_nombre 
-            FROM asistencia 
-            LEFT JOIN empleado ON asistencia.id_empleado = empleado.id_empleado
-        """)
-        asistencias = cursor.fetchall()
-        
-        # Convertir las horas de TIME a formato string (HH:MM:SS)
-        for asistencia in asistencias:
-            if asistencia['hora_entrada']:
-                asistencia['hora_entrada'] = str(asistencia['hora_entrada'])
-            if asistencia['hora_salida']:
-                asistencia['hora_salida'] = str(asistencia['hora_salida'])
-        
-        return jsonify(asistencias)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.post('/api/asistencia')
-def create_asistencia():
-    id_empleado = request.json.get('id_empleado')
-    fecha_ingreso = request.json.get('fecha_ingreso')
-    hora_entrada = request.json.get('hora_entrada')
-    hora_salida = request.json.get('hora_salida')
-    estatus = request.json.get('estatus', 'activo')
-    if not all([id_empleado, fecha_ingreso, estatus]):
-        return jsonify({"error": "Los campos 'id_empleado', 'fecha_ingreso' y 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_asistencia FROM asistencia WHERE id_asistencia LIKE 'A%' ORDER BY id_asistencia DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"A{last_num + 1:03d}"
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Empleado eliminado exitosamente"}), 200
         else:
-            nuevo_id = "A001"
-        if hora_entrada:
-            hora_entrada = str(hora_entrada)
-        if hora_salida:
-            hora_salida = str(hora_salida)
-        cursor.execute(
-            """
-            INSERT INTO asistencia 
-            (id_asistencia, id_empleado, fecha_ingreso, hora_entrada, hora_salida, estatus) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (nuevo_id, id_empleado, fecha_ingreso, hora_entrada, hora_salida, estatus)
-        )
-        conn.commit()
-        return jsonify({"message": "Asistencia creada exitosamente", "id_asistencia": nuevo_id}), 201
+            return jsonify({"message": "Empleado no encontrado para eliminar"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.put('/api/asistencia/<string:id_asistencia>')
-def update_asistencia(id_asistencia):
-    id_empleado = request.json.get('id_empleado')
-    fecha_ingreso = request.json.get('fecha_ingreso')
-    hora_entrada = request.json.get('hora_entrada')
-    estatus = request.json.get('estatus', 'activo')
-    
-    if not id_empleado or not fecha_ingreso or not hora_entrada or not estatus:
-        return jsonify({"error": "Los campos 'id_empleado', 'fecha_ingreso', 'hora_entrada' e 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE asistencia SET id_empleado = %s, fecha_ingreso = %s, hora_entrada = %s, estatus = %s WHERE id_asistencia = %s",
-            (id_empleado, fecha_ingreso, hora_entrada, estatus, id_asistencia)
-        )
-        conn.commit()
-        return jsonify({"message": "Asistencia actualizado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
+##################################333
+#detalle factura
 
-@app.delete('/api/asistencia/<string:id_asistencia>')
-def delete_asistencia(id_asistencia):
+# Obtener todos los detalles de factura
+@app.route('/detallefactura', methods=['GET'])
+def get_detallefacturas():
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM asistencia WHERE id_asistencia = %s", (id_asistencia,))
-        conn.commit()
-        return jsonify({"message": "Asistencia eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-#######################################
-@app.get('/api/seguridad_personal')
-def get_seguridad_personal():
-    try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT seguridad_personal.*, empleado.nombre AS empleado_nombre, rol.descripcion AS rol_descripcion 
-            FROM seguridad_personal 
-            LEFT JOIN empleado ON seguridad_personal.id_empleado = empleado.id_empleado 
-            LEFT JOIN rol ON seguridad_personal.id_rol = rol.id_rol
-        """)
-        seguridad_personal = cursor.fetchall()
-        return jsonify(seguridad_personal)
+        cursor.execute("SELECT * FROM detallefactura")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.post('/api/seguridad_personal')
-def create_seguridad_personal():
-    usuario = request.json.get('usuario')
-    contrasena = request.json.get('contrasena')
-    id_empleado = request.json.get('id_empleado')
-    id_rol = request.json.get('id_rol')
-    estatus = request.json.get('estatus', 'activo')
-    if not all([usuario, contrasena, id_empleado]):
-        return jsonify({"error": "Los campos 'usuario', 'contrasena' e 'id_empleado' son requeridos"}), 400
+# Obtener un detalle de factura por id_detalle
+@app.route('/detallefactura/<int:id_detalle>', methods=['GET'])
+def get_detallefactura(id_detalle):
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_usuario FROM seguridad_personal WHERE id_usuario LIKE 'S%' ORDER BY id_usuario DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"S{last_num + 1:03d}"
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM detallefactura WHERE id_detalle = %s", (id_detalle,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
         else:
-            nuevo_id = "S001"
-        cursor.execute("""
-            INSERT INTO seguridad_personal 
-            (id_usuario, usuario, contrasena, id_empleado, id_rol, estatus) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (nuevo_id, usuario, contrasena, id_empleado, id_rol, estatus))
-        conn.commit()
-        return jsonify({"message": "Usuario de seguridad creado exitosamente", "id_usuario": nuevo_id}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-@app.put('/api/seguridad_personal/<string:id_usuario>')
-def update_seguridad_personal(id_usuario):
-    usuario = request.json.get('usuario')
-    contrasena = request.json.get('contrasena')
-    id_empleado = request.json.get('id_empleado')
-    id_rol = request.json.get('id_rol')
-    estatus = request.json.get('estatus', 'activo')
-    
-    if not usuario or not contrasena or not id_empleado or not id_rol or not estatus:
-        return jsonify({"error": "Los campos 'usuario', 'contrasena', 'id_empleado', 'id_rol' e 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE seguridad_personal SET usuario = %s, contrasena = %s, id_empleado = %s, id_rol = %s, estatus = %s WHERE id_usuario = %s",
-            (usuario, contrasena, id_empleado, id_rol, estatus, id_usuario)
-        )
-        conn.commit()
-        return jsonify({"message": "Usuario actualizado exitosamente"})
+            return jsonify({"message": "Detalle de factura no encontrado"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.delete('/api/seguridad_personal/<string:id_usuario>')
-def delete_seguridad_personal(id_usuario):
+# Crear un nuevo detalle de factura
+@app.route('/detallefactura', methods=['POST'])
+def create_detallefactura():
     try:
-        conn = get_connection(base_datos_personal)
+        data = request.get_json()
+        id_factura = data['id_factura']
+        id_medicamento = data.get('id_medicamento', None)
+        id_procedimiento_medico = data.get('id_procedimiento_medico', None)
+        cantidad = data['cantidad']
+        precio_unitario = data['precio_unitario']
+        subtotal = data['subtotal']
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM seguridad_personal WHERE id_usuario = %s", (id_usuario,))
+        cursor.execute("""
+            INSERT INTO detallefactura (id_factura, id_medicamento, id_procedimiento_medico, 
+                                       cantidad, precio_unitario, subtotal, id_usuario_modificacion, 
+                                       id_status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (id_factura, id_medicamento, id_procedimiento_medico, cantidad, precio_unitario, 
+              subtotal, id_usuario_modificacion, id_status))
         conn.commit()
-        return jsonify({"message": "Usuario eliminado exitosamente"})
+        
+        return jsonify({"message": "Detalle de factura creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un detalle de factura por id_detalle
+@app.route('/detallefactura/<int:id_detalle>', methods=['PUT'])
+def update_detallefactura(id_detalle):
+    try:
+        data = request.get_json()
+        id_factura = data.get('id_factura')
+        id_medicamento = data.get('id_medicamento')
+        id_procedimiento_medico = data.get('id_procedimiento_medico')
+        cantidad = data.get('cantidad')
+        precio_unitario = data.get('precio_unitario')
+        subtotal = data.get('subtotal')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE detallefactura
+            SET id_factura = %s, id_medicamento = %s, id_procedimiento_medico = %s, 
+                cantidad = %s, precio_unitario = %s, subtotal = %s, 
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_detalle = %s
+        """, (id_factura, id_medicamento, id_procedimiento_medico, cantidad, precio_unitario, 
+              subtotal, id_usuario_modificacion, id_status, id_detalle))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Detalle de factura actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Detalle de factura no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un detalle de factura por id_detalle
+@app.route('/detallefactura/<int:id_detalle>', methods=['DELETE'])
+def delete_detallefactura(id_detalle):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM detallefactura WHERE id_detalle = %s", (id_detalle,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Detalle de factura eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Detalle de factura no encontrado para eliminar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+#####################################3
+#Descuento
+
+# Obtener todos los descuentos
+@app.route('/descuento', methods=['GET'])
+def get_descuentos():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM descuento")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Obtener un descuento por id_descuento
+@app.route('/descuento/<int:id_descuento>', methods=['GET'])
+def get_descuento(id_descuento):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM descuento WHERE id_descuento = %s", (id_descuento,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
+        else:
+            return jsonify({"message": "Descuento no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Crear un nuevo descuento
+@app.route('/descuento', methods=['POST'])
+def create_descuento():
+    try:
+        data = request.get_json()
+        nombre_descuento = data['nombre_descuento']
+        porcentaje_descuento = data.get('porcentaje_descuento', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO descuento (nombre_descuento, porcentaje_descuento, id_usuario_modificacion, id_status)
+            VALUES (%s, %s, %s, %s)
+        """, (nombre_descuento, porcentaje_descuento, id_usuario_modificacion, id_status))
+        conn.commit()
+        
+        return jsonify({"message": "Descuento creado exitosamente"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Actualizar un descuento por id_descuento
+@app.route('/descuento/<int:id_descuento>', methods=['PUT'])
+def update_descuento(id_descuento):
+    try:
+        data = request.get_json()
+        nombre_descuento = data.get('nombre_descuento')
+        porcentaje_descuento = data.get('porcentaje_descuento')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE descuento
+            SET nombre_descuento = %s, porcentaje_descuento = %s, 
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_descuento = %s
+        """, (nombre_descuento, porcentaje_descuento, id_usuario_modificacion, id_status, id_descuento))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Descuento actualizado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Descuento no encontrado para actualizar"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# Eliminar un descuento por id_descuento
+@app.route('/descuento/<int:id_descuento>', methods=['DELETE'])
+def delete_descuento(id_descuento):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM descuento WHERE id_descuento = %s", (id_descuento,))
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Descuento eliminado exitosamente"}), 200
+        else:
+            return jsonify({"message": "Descuento no encontrado para eliminar"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -435,675 +1369,116 @@ def delete_seguridad_personal(id_usuario):
         conn.close()
 
 ###############################
-@app.get('/api/evaluacion')
-def get_evaluaciones():
+# #corte de caja
+
+# Obtener todos los cortes de caja
+@app.route('/cortedecaja', methods=['GET'])
+def get_cortes_de_caja():
     try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT evaluacion.id_evaluacion, evaluacion.id_empleado, evaluacion.fecha, 
-                   evaluacion.puntuacion, evaluacion.comentarios, evaluacion.estatus, 
-                   evaluacion.fecha_modificacion, 
-                   empleado.nombre AS empleado_nombre
-            FROM evaluacion 
-            LEFT JOIN empleado ON evaluacion.id_empleado = empleado.id_empleado
-        """)
-        evaluaciones = cursor.fetchall()
-        return jsonify(evaluaciones)
+        cursor.execute("SELECT * FROM cortedecaja")
+        rows = cursor.fetchall()
+        return jsonify(rows), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.post('/api/evaluacion')
-def create_evaluacion():
-    id_empleado = request.json.get('id_empleado')
-    fecha = request.json.get('fecha')
-    puntuacion = request.json.get('puntuacion')
-    comentarios = request.json.get('comentarios')
-    estatus = request.json.get('estatus', 'activo')
-    if not id_empleado or not fecha or not puntuacion:
-        return jsonify({"error": "Los campos 'id_empleado', 'fecha' y 'puntuacion' son requeridos"}), 400
+# Obtener un corte de caja por id_corte
+@app.route('/cortedecaja/<int:id_corte>', methods=['GET'])
+def get_corte_de_caja(id_corte):
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_evaluacion FROM evaluacion WHERE id_evaluacion LIKE 'EV%' ORDER BY id_evaluacion DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][2:])
-            nuevo_id = f"EV{last_num + 1:03d}"
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM cortedecaja WHERE id_corte = %s", (id_corte,))
+        row = cursor.fetchone()
+        if row:
+            return jsonify(row), 200
         else:
-            nuevo_id = "EV001"
-        cursor.execute(
-            """
-            INSERT INTO evaluacion 
-            (id_evaluacion, id_empleado, fecha, puntuacion, comentarios, estatus) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (nuevo_id, id_empleado, fecha, puntuacion, comentarios, estatus)
-        )
-        conn.commit()
-        return jsonify({"message": "Evaluación creada exitosamente", "id_evaluacion": nuevo_id}), 201
+            return jsonify({"message": "Corte de caja no encontrado"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.put('/api/evaluacion/<string:id_evaluacion>')
-def update_evaluacion(id_evaluacion):
-    id_empleado = request.json.get('id_empleado')
-    fecha = request.json.get('fecha')
-    puntuacion = request.json.get('puntuacion')
-    comentarios = request.json.get('comentarios', '')
-    estatus = request.json.get('estatus', 'activo')
-    if not id_empleado or not fecha or not puntuacion:
-        return jsonify({"error": "Los campos 'id_empleado', 'fecha' y 'puntuacion' son requeridos"}), 400
+# Crear un nuevo corte de caja
+@app.route('/cortedecaja', methods=['POST'])
+def create_corte_de_caja():
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE evaluacion 
-            SET id_empleado = %s, fecha = %s, puntuacion = %s, comentarios = %s, estatus = %s
-            WHERE id_evaluacion = %s
-            """,
-            (id_empleado, fecha, puntuacion, comentarios, estatus, id_evaluacion)
-        )
-        conn.commit()
-        if cursor.rowcount == 0:
-            return jsonify({"error": "Evaluación no encontrada"}), 404
-        return jsonify({"message": "Evaluación actualizada exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
+        data = request.get_json()
+        fecha_corte = data['fecha_corte']
+        monto_total = data['monto_total']
+        detalles = data.get('detalles', None)
+        id_usuario_modificacion = data.get('id_usuario_modificacion', None)
+        id_status = data['id_status']
         
-@app.delete('/api/evaluacion/<string:id_evaluacion>')
-def delete_evaluacion(id_evaluacion):
-    try:
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM evaluacion WHERE id_evaluacion = %s", (id_evaluacion,))
-        conn.commit()
-        return jsonify({"message": "Evaluacion eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-################################
-@app.get('/api/nomina')
-def get_nominas():
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT nomina.*, 
-                   empleado.nombre AS empleado_nombre
-            FROM nomina 
-            LEFT JOIN empleado ON nomina.id_empleado = empleado.id_empleado
-        """)
-        nominas = cursor.fetchall()
-        return jsonify(nominas)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.post('/api/nomina')
-def create_nomina():
-    id_empleado = request.json.get('id_empleado')
-    periodo = request.json.get('periodo')
-    salario = request.json.get('salario')
-    estatus = request.json.get('estatus', 'activo')
-    if not id_empleado or not periodo or not salario:
-        return jsonify({"error": "Los campos 'id_empleado', 'periodo' y 'salario' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_nomina FROM nomina WHERE id_nomina LIKE 'N%' ORDER BY id_nomina DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"N{last_num + 1:03d}"
-        else:
-            nuevo_id = "N001"
-        cursor.execute(
-            """
-            INSERT INTO nomina (id_nomina, id_empleado, periodo, salario, estatus) 
+            INSERT INTO cortedecaja (fecha_corte, monto_total, detalles, id_usuario_modificacion, id_status)
             VALUES (%s, %s, %s, %s, %s)
-            """,
-            (nuevo_id, id_empleado, periodo, salario, estatus)
-        )
+        """, (fecha_corte, monto_total, detalles, id_usuario_modificacion, id_status))
         conn.commit()
-        return jsonify({"message": "Nómina creada exitosamente", "id_nomina": nuevo_id}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.put('/api/nomina/<string:id_nomina>')
-def update_nomina(id_nomina):
-    id_empleado = request.json.get('id_empleado')
-    periodo = request.json.get('periodo')
-    salario = request.json.get('salario')
-    estatus = request.json.get('estatus', 'activo')
-    if not id_empleado or not periodo or not salario:
-        return jsonify({"error": "Los campos 'id_empleado', 'periodo' y 'salario' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM nomina WHERE id_nomina = %s", (id_nomina,))
-        existing_nomina = cursor.fetchone()
-        if not existing_nomina:
-            return jsonify({"error": "Nómina no encontrada"}), 404
-        cursor.execute(
-            """
-            UPDATE nomina 
-            SET id_empleado = %s, periodo = %s, salario = %s, estatus = %s 
-            WHERE id_nomina = %s
-            """,
-            (id_empleado, periodo, salario, estatus, id_nomina)
-        )
-        conn.commit()
-        return jsonify({"message": "Nómina actualizada exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
         
-@app.delete('/api/nomina/<string:id_nomina>')
-def delete_nomina(id_nomina):
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM nomina WHERE id_nomina = %s", (id_nomina,))
-        conn.commit()
-        return jsonify({"message": "Nomina eliminado exitosamente"})
+        return jsonify({"message": "Corte de caja creado exitosamente"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-###################################################
-@app.get('/api/horario')
-def get_horarios():
+# Actualizar un corte de caja por id_corte
+@app.route('/cortedecaja/<int:id_corte>', methods=['PUT'])
+def update_corte_de_caja(id_corte):
     try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor(dictionary=True)
+        data = request.get_json()
+        fecha_corte = data.get('fecha_corte')
+        monto_total = data.get('monto_total')
+        detalles = data.get('detalles')
+        id_usuario_modificacion = data.get('id_usuario_modificacion')
+        id_status = data.get('id_status')
+
+        conn = get_connection()
+        cursor = conn.cursor()
         cursor.execute("""
-            SELECT horario.*, empleado.nombre AS empleado_nombre
-            FROM horario 
-            LEFT JOIN empleado ON horario.id_empleado = empleado.id_empleado
-        """)
-        horarios = cursor.fetchall()
-        for horario in horarios:
-            if horario['hora_entrada']:
-                horario['hora_entrada'] = str(horario['hora_entrada'])
-            if horario['hora_salida']:
-                horario['hora_salida'] = str(horario['hora_salida'])
-        return jsonify(horarios)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
+            UPDATE cortedecaja
+            SET fecha_corte = %s, monto_total = %s, detalles = %s, 
+                id_usuario_modificacion = %s, id_status = %s
+            WHERE id_corte = %s
+        """, (fecha_corte, monto_total, detalles, id_usuario_modificacion, id_status, id_corte))
+        conn.commit()
 
-@app.post('/api/horario')
-def create_horario():
-    try:
-        id_empleado = request.json.get('id_empleado')
-        fecha = request.json.get('fecha')
-        hora_entrada = request.json.get('hora_entrada')
-        hora_salida = request.json.get('hora_salida')
-        estatus = request.json.get('estatus', 'activo')
-        if not id_empleado or not fecha or not hora_entrada or not hora_salida or not estatus:
-            return jsonify({"error": "Los campos 'id_empleado', 'fecha', 'hora_entrada', 'hora_salida' y 'estatus' son requeridos"}), 400
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_horario FROM horario WHERE id_horario LIKE 'H%' ORDER BY id_horario DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"H{last_num + 1:03d}"
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Corte de caja actualizado exitosamente"}), 200
         else:
-            nuevo_id = "H001"
-        cursor.execute("""
-            INSERT INTO horario (id_horario, id_empleado, fecha, hora_entrada, hora_salida, estatus)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (nuevo_id, id_empleado, fecha, hora_entrada, hora_salida, estatus))
-        conn.commit()
-        return jsonify({"message": "Horario creado exitosamente", "id_horario": nuevo_id}), 201
+            return jsonify({"message": "Corte de caja no encontrado para actualizar"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
 
-@app.put('/api/horario/<string:id_horario>')
-def update_horario(id_horario):
+# Eliminar un corte de caja por id_corte
+@app.route('/cortedecaja/<int:id_corte>', methods=['DELETE'])
+def delete_corte_de_caja(id_corte):
     try:
-        id_empleado = request.json.get('id_empleado')
-        fecha = request.json.get('fecha')
-        hora_entrada = request.json.get('hora_entrada')
-        hora_salida = request.json.get('hora_salida')
-        estatus = request.json.get('estatus')
-        if not id_empleado or not fecha or not hora_entrada or not hora_salida or estatus is None:
-            return jsonify({"error": "Los campos 'id_empleado', 'fecha', 'hora_entrada', 'hora_salida' y 'estatus' son requeridos"}), 400
-        conn = get_connection(base_datos_personal)
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id_horario FROM horario WHERE id_horario = %s", (id_horario,))
-        existing_horario = cursor.fetchone()
-        if not existing_horario:
-            return jsonify({"error": "Horario no encontrado"}), 404
-        cursor.execute("""
-            UPDATE horario 
-            SET id_empleado = %s, fecha = %s, hora_entrada = %s, hora_salida = %s, estatus = %s
-            WHERE id_horario = %s
-        """, (id_empleado, fecha, hora_entrada, hora_salida, estatus, id_horario))
+        cursor.execute("DELETE FROM cortedecaja WHERE id_corte = %s", (id_corte,))
         conn.commit()
-        return jsonify({"message": "Horario actualizado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-@app.delete('/api/horario/<string:id_horario>')
-def delete_horario(id_horario):
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM horario WHERE id_horario = %s", (id_horario,))
-        conn.commit()
-        return jsonify({"message": "Horario eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-###########################################################
-@app.get('/api/bitacora_personal')
-def get_bitacora_personal():
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT bitacora_personal.*, empleado.nombre AS empleado_nombre
-            FROM bitacora_personal
-            LEFT JOIN empleado ON bitacora_personal.id_empleado = empleado.id_empleado
-        """)
-        bitacora = cursor.fetchall()
-        return jsonify(bitacora)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
 
-@app.post('/api/bitacora_personal')
-def create_bitacora_personal():
-    try:
-        id_empleado = request.json.get('id_empleado')
-        accion = request.json.get('accion')
-        if not id_empleado or not accion:
-            return jsonify({"error": "Los campos 'id_empleado' y 'accion' son requeridos"}), 400
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_bitacora FROM bitacora_personal ORDER BY id_bitacora DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_num = int(last_id[0][1:])
-            nuevo_id = f"B{last_num + 1:03d}"
+        if cursor.rowcount > 0:
+            return jsonify({"message": "Corte de caja eliminado exitosamente"}), 200
         else:
-            nuevo_id = "B001"
-        cursor.execute("""
-            INSERT INTO bitacora_personal (id_bitacora, id_empleado, accion)
-            VALUES (%s, %s, %s)
-        """, (nuevo_id, id_empleado, accion))
-        conn.commit()
-        return jsonify({"message": "Bitácora personal creada exitosamente", "id_bitacora": nuevo_id}), 201
+            return jsonify({"message": "Corte de caja no encontrado para eliminar"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cursor.close()
         conn.close()
-
-@app.put('/api/bitacora_personal/<string:id_bitacora>')
-def update_bitacora_personal(id_bitacora):
-    try:
-        id_empleado = request.json.get('id_empleado')
-        accion = request.json.get('accion')
-        if not id_empleado and not accion:
-            return jsonify({"error": "Se requiere al menos uno de los campos 'id_empleado' o 'accion'}"}), 400
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_bitacora FROM bitacora_personal WHERE id_bitacora = %s", (id_bitacora,))
-        if cursor.fetchone() is None:
-            return jsonify({"error": f"No se encontró la bitácora con el id {id_bitacora}"}), 404
-        update_values = []
-        query = "UPDATE bitacora_personal SET"
-        if id_empleado:
-            query += " id_empleado = %s,"
-            update_values.append(id_empleado)
-        if accion:
-            query += " accion = %s,"
-            update_values.append(accion)
-        query = query.rstrip(',')
-        query += " WHERE id_bitacora = %s"
-        update_values.append(id_bitacora)
-        cursor.execute(query, tuple(update_values))
-        conn.commit()
-        return jsonify({"message": "Bitácora personal actualizada exitosamente"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-@app.delete('/api/bitacora_personal/<string:id_bitacora_personal>')
-def delete_bitacora_personal(id_bitacora_personal):
-    try:
-        conn = get_connection(base_datos_personal)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM bitacora_personal WHERE id_bitacora_personal = %s", (id_bitacora_personal,))
-        conn.commit()
-        return jsonify({"message": "Rol eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-################################################
-"""
-@app.get('/api/rol')
-def get_roles():
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM rol")
-        roles = cursor.fetchall()
-        return jsonify(roles)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.post('/api/rol')
-def create_rol():
-    descripcion = request.json.get('descripcion')
-    estatus = request.json.get('estatus')
-    if not descripcion or not estatus:
-        return jsonify({"error": "Los campos 'descripcion' y 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO rol (id_rol, descripcion, estatus) VALUES (UUID(), %s, %s)",
-            (descripcion, estatus)
-        )
-        conn.commit()
-        return jsonify({"message": "Rol creado exitosamente"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.delete('/api/rol/<string:id_rol>')
-def delete_rol(id_rol):
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM rol WHERE id_rol = %s", (id_rol,))
-        conn.commit()
-        return jsonify({"message": "Rol eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.put('/api/rol/<string:id_rol>')
-def update_rol(id_rol):
-    descripcion = request.json.get('descripcion')
-    estatus = request.json.get('estatus')
-    if not descripcion or not estatus:
-        return jsonify({"error": "Los campos 'descripcion' y 'estatus' son requeridos"}), 400
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE rol SET descripcion = %s, estatus = %s WHERE id_rol = %s",
-            (descripcion, estatus, id_rol)
-        )
-        conn.commit()
-        return jsonify({"message": "Rol actualizado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.get('/api/rol/<string:id_rol>')
-def get_rol(id_rol):
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM rol WHERE id_rol = %s", (id_rol,))
-        rol = cursor.fetchone()
-        if rol:
-            return jsonify(rol)
-        return jsonify({"error": "Rol no encontrado"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-"""
-        
-############################################################
-@app.get('/api/usuario')
-def get_usuarios():
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT usuario.*, rol.descripcion AS rol_descripcion
-            FROM usuario
-            LEFT JOIN rol ON usuario.id_rol = rol.id_rol
-        """)
-        usuarios = cursor.fetchall()
-        return jsonify(usuarios)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.post('/api/usuario')
-def create_usuario():
-    try:
-        nombre_usuario = request.json.get('nombre_usuario')
-        contrasena = request.json.get('contrasena')
-        id_rol = request.json.get('id_rol', None)
-        estatus = request.json.get('estatus', 'activo')
-        if not nombre_usuario or not contrasena or not estatus:
-            return jsonify({"error": "Los campos 'nombre_usuario', 'contrasena' y 'estatus' son requeridos"}), 400
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id_usuario FROM usuario ORDER BY id_usuario DESC LIMIT 1")
-        last_id = cursor.fetchone()
-        if last_id:
-            last_id_num = int(last_id['id_usuario'][1:])
-            new_id_num = last_id_num + 1
-            new_id_usuario = f'U{new_id_num:03}'
-        else:
-            new_id_usuario = 'U001'
-        cursor.execute("""
-            INSERT INTO usuario (id_usuario, nombre_usuario, contrasena, id_rol, estatus)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (new_id_usuario, nombre_usuario, contrasena, id_rol, estatus))
-        conn.commit()
-        return jsonify({"message": f"Usuario {new_id_usuario} creado exitosamente"}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-@app.delete('/api/usuario/<string:id_usuario>')
-def delete_usuario(id_usuario):
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM usuario WHERE id_usuario = %s", (id_usuario,))
-        conn.commit()
-        return jsonify({"message": "Usuario eliminado exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.put('/api/usuario/<string:id_usuario>')
-def update_usuario(id_usuario):
-    try:
-        nombre_usuario = request.json.get('nombre_usuario')
-        contrasena = request.json.get('contrasena')
-        id_rol = request.json.get('id_rol', None)
-        estatus = request.json.get('estatus', 'activo')
-        if not nombre_usuario or not contrasena or not estatus:
-            return jsonify({"error": "Los campos 'nombre_usuario', 'contrasena' y 'estatus' son requeridos"}), 400
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id_usuario,))
-        usuario_existente = cursor.fetchone()
-        if not usuario_existente:
-            return jsonify({"error": "Usuario no encontrado"}), 404
-        cursor.execute("""
-            UPDATE usuario 
-            SET nombre_usuario = %s, contrasena = %s, id_rol = %s, estatus = %s 
-            WHERE id_usuario = %s
-        """, (nombre_usuario, contrasena, id_rol, estatus, id_usuario))
-        conn.commit()
-        return jsonify({"message": f"Usuario {id_usuario} actualizado exitosamente"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-############################################################
-@app.get('/api/bitacora_seguridad')
-def get_bitacora_seguridad():
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT bitacora_seguridad.*, usuario.nombre_usuario AS usuario_nombre
-            FROM bitacora_seguridad 
-            LEFT JOIN usuario ON bitacora_seguridad.id_usuario = usuario.id_usuario
-        """)
-        bitacora = cursor.fetchall()
-        return jsonify(bitacora)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.post('/api/bitacora_seguridad')
-def create_bitacora_seguridad():
-    try:
-        accion = request.json.get('accion')
-        id_usuario = request.json.get('id_usuario')
-        if not accion or not id_usuario:
-            return jsonify({"error": "Los campos 'accion' y 'id_usuario' son requeridos"}), 400
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id_bitacora FROM bitacora_seguridad ORDER BY id_bitacora DESC LIMIT 1")
-        last_id_result = cursor.fetchone()
-        if last_id_result:
-            last_id = last_id_result['id_bitacora']
-            next_id_int = int(last_id[1:]) + 1
-            next_id = f"B{next_id_int:03d}"
-        else:
-            next_id = "B001"
-        cursor.execute("""
-            INSERT INTO bitacora_seguridad (id_bitacora, id_usuario, accion)
-            VALUES (%s, %s, %s)
-        """, (next_id, id_usuario, accion))
-        conn.commit()
-        return jsonify({"message": "Bitácora de seguridad creada exitosamente", "id_bitacora": next_id})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.put('/api/bitacora_seguridad/<string:id_bitacora>')
-def update_bitacora_seguridad(id_bitacora):
-    try:
-        accion = request.json.get('accion')
-        id_usuario = request.json.get('id_usuario')
-        if not accion or not id_usuario:
-            return jsonify({"error": "Los campos 'accion' y 'id_usuario' son requeridos"}), 400
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id_bitacora FROM bitacora_seguridad WHERE id_bitacora = %s", (id_bitacora,))
-        existing_bitacora = cursor.fetchone()
-        if not existing_bitacora:
-            return jsonify({"error": "No se encontró la bitácora con el id proporcionado"}), 404
-        cursor.execute("""
-            UPDATE bitacora_seguridad
-            SET id_usuario = %s, accion = %s
-            WHERE id_bitacora = %s
-        """, (id_usuario, accion, id_bitacora))
-        conn.commit()
-        return jsonify({"message": "Bitácora de seguridad actualizada exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.delete('/api/bitacora_seguridad/<string:id_bitacora>')
-def delete_bitacora_seguridad(id_bitacora):
-    try:
-        conn = get_connection(base_datos_seguridad)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM bitacora_seguridad WHERE id_bitacora = %s", (id_bitacora,))
-        conn.commit()
-        return jsonify({"message": "Bitácora de seguridad eliminada exitosamente"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        cursor.close()
-        conn.close()
-        
-@app.get('/')
-def home():
-    return send_file('static/index.html')
-
-@app.route('/create-role')
-def create_role():
-    return send_file('create-role.html')
-
-@app.route('/edit-role')
-def edit_role():
-    return render_template('edit-role.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
